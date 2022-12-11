@@ -1,5 +1,4 @@
 const fs = require('fs');
-const { json } = require('stream/consumers');
 
 const url = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
 const banks = {
