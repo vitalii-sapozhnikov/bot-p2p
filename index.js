@@ -1,5 +1,7 @@
 const TelegramApi = require('node-telegram-bot-api')
 const Parse = require('./parse')
+const fetch = require('node-fetch');
+
 
 const token = '5975262233:AAEUfVIcGTN2ybc_mctN_o_ZZpJuRIMmbpU';
 const bot = new TelegramApi(token, {polling: true});
