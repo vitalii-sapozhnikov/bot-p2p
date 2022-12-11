@@ -1,11 +1,12 @@
 const TelegramApi = require('node-telegram-bot-api')
 const Parse = require('./parse')
-const fetch = require('node-fetch');
 
 
 const token = '5975262233:AAEUfVIcGTN2ybc_mctN_o_ZZpJuRIMmbpU';
 const bot = new TelegramApi(token, {polling: true});
 let notifyArr = [];
+let lastArbObj;
+let percent = 0.5;
 
 function start() {
     bot.setMyCommands([
@@ -31,23 +32,14 @@ function start() {
         if(text === '/get')
         {
             const res = await Parse.update();
-            let string = '';
-            for (const opt of res) {
-                string += `${opt.title}\n`;
-                string += `Sell price: ${opt.sellPrice}\n`;
-                string += `Range: ${opt.range}\n`
-                string += `Nickname: ${opt.name}\n`
-                string += `Buy price: ${opt.buyPrice}\n`
-                string += `Banks: ${opt.banks.join(', ')}\n`
-                string += `Profit UAH: ${opt.profitUAH} (${opt.profitPercent} %)\n\n`;
-            }
+            let string = await buildResultString(res);
             return bot.sendMessage(chatId, string);
         }
     }));
 }
 
 const addNotify = (chatId) =>{
-    const checkFrequency = 1000;
+    const checkFrequency = 10000;
     if(!notifyArr.find(n => n.chatId === chatId)){
         notifyArr.push({'chatId': chatId, 'interval': setInterval(notificationFunc, checkFrequency, chatId)});
     }
@@ -61,7 +53,29 @@ const removeNotify = (chatId) => {
 }
 
 const notificationFunc = async (chatId) => {
-    await bot.sendMessage(chatId, 'alert');
+    const res = await Parse.update();
+    let string = await buildResultString(res);
+    if(JSON.stringify(lastArbObj) === JSON.stringify(res[0]))
+        return;
+    if(res[0].profitPercent < percent){
+        return;
+    }
+    lastArbObj = res[0];
+    await bot.sendMessage(chatId, string);
+}
+
+async function buildResultString(res) {
+    let string = '';
+    for (const opt of res) {
+        string += `${opt.title}\n`;
+        string += `Sell price: ${opt.sellPrice}\n`;
+        string += `Range: ${opt.range}\n`;
+        string += `Nickname: ${opt.name}\n`;
+        string += `Buy price: ${opt.buyPrice}\n`;
+        string += `Banks: ${opt.banks.join(', ')}\n`;
+        string += `Profit UAH: ${opt.profitUAH} (${opt.profitPercent} %)\n\n`;
+    }
+    return string;
 }
 
 start();
