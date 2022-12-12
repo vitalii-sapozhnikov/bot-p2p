@@ -10,17 +10,15 @@ let percent = 0.5;
 
 function start() {
     bot.setMyCommands([
-        {command: '/start', description: 'First greeting'},
         {command: '/get', description: 'Get Arbitrage now'},
         {command: '/subscribe', description: 'Subscribe to notifications'},
-        {command: '/unsubscribe', description: 'Unsubscribe from notifications'}
+        {command: '/unsubscribe', description: 'Unsubscribe from notifications'},
+        {command: '/rates', description: 'Get current exchange rates'},
+        {command: '/p2p', description: 'Get first 10 orders on Binance P2P'}
     ])
     bot.on('message', (async (msg) => {
         const text = msg.text;
         const chatId = msg.chat.id;
-        if(text === '/start'){
-            return bot.sendMessage(chatId, 'Hallo! I will notify you whenever I see arbitrage situations.')
-        }
         if(text === '/subscribe'){
             addNotify(chatId);
             return bot.sendMessage(chatId, 'You successfully subscribed!');
@@ -32,8 +30,23 @@ function start() {
         if(text === '/get')
         {
             const res = await Parse.update();
-            let string = await buildResultString(res);
-            return bot.sendMessage(chatId, string);
+            let string = buildResultString(res);
+            return bot.sendMessage(chatId, string, options={parse_mode: 'html'});
+        }
+        if(text === '/rates'){
+            let msg = `Whitebit:\t<code> ${await Parse.getWhiteBitSpotRate()}</code>\nBinance:\t<code> ${await Parse.getBinanceSpotRate()}</code>`;
+            return bot.sendMessage(chatId, msg, options={parse_mode: 'html'});
+        }
+        if(text == '/p2p'){
+            let adverts = await Parse.curlBinanceP2P();
+            let msg = '';
+            for (const ad of adverts) {
+                msg += `Price:   <code> ${ad.price}</code>\n`;
+                msg += `Range: <code> ${ad.min} - ${ad.max} ₴</code>\n`;
+                msg += `Name:  <code> ${ad.name}</code>\n`;
+                msg += `Banks:  <code> ${ad.banks.join(', ')}</code>\n\n`;
+            }
+            return bot.sendMessage(chatId, msg, options = {parse_mode: 'html'});
         }
     }));
 }
@@ -54,26 +67,24 @@ const removeNotify = (chatId) => {
 
 const notificationFunc = async (chatId) => {
     const res = await Parse.update();
-    let string = await buildResultString(res);
     if(JSON.stringify(lastArbObj) === JSON.stringify(res[0]))
         return;
-    if(res[0].profitPercent < percent){
+    if(res[0].profitPercent < percent)
         return;
-    }
+
     lastArbObj = res[0];
-    await bot.sendMessage(chatId, string);
+    await bot.sendMessage(chatId, buildResultString(res), options={parse_mode: 'html'});
 }
 
-async function buildResultString(res) {
+const buildResultString = (res) => {
     let string = '';
-    for (const opt of res) {
-        string += `${opt.title}\n`;
-        string += `Sell price: ${opt.sellPrice}\n`;
-        string += `Range: ${opt.range}\n`;
-        string += `Nickname: ${opt.name}\n`;
-        string += `Buy price: ${opt.buyPrice}\n`;
-        string += `Banks: ${opt.banks.join(', ')}\n`;
-        string += `Profit UAH: ${opt.profitUAH} (${opt.profitPercent} %)\n\n`;
+    for (let i = 0; i < 2; i++) {
+        const opt = res[i];
+        string += `Sell:       <code>${opt.sellBanks.join(', ')} -- ${opt.sellPrice}</code>\n`;
+        string += `Range:  <code>${opt.sellRange}</code>\n`;
+        string += `Name:   <code>${opt.sellNickName}</code>\n`;
+        string += `Buy:       <code>${opt.buyOption} -- <i>${opt.buyPrice}</i></code>\n`;
+        string += `<b>Profit:    ${opt.profitUAH} ₴  (${opt.profitPercent} %)</b>\n\n`;        
     }
     return string;
 }

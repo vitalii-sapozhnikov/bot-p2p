@@ -10,7 +10,7 @@ const banks = {
     'sport': 'Sportbank',
 }
 
-const curlBinanceP2P = async (min, bankArr) => {
+const curlBinanceP2P = async (min = 0, max = 100000, bankArr = null) => {
     let response = await fetch(url, {
         hostname: 'p2p.binance.com',
         port: 443,
@@ -33,83 +33,76 @@ const curlBinanceP2P = async (min, bankArr) => {
     });
     let advObj = await response.json();
 
-    // dynamicMaxSingleTransAmount - max
-    // minSingleTransAmount - min
+    let resArr = [];
     for (const adv of advObj.data) {
-        if(adv.adv.minSingleTransAmount <= min && adv.adv.dynamicMaxSingleTransAmount > min)
-            return {
+        if(!(adv.adv.minSingleTransAmount > max || adv.adv.dynamicMaxSingleTransAmount < min))
+            resArr.push({
                 "price": parseFloat(adv.adv.price),
                 "min": adv.adv.minSingleTransAmount,
                 "max": adv.adv.dynamicMaxSingleTransAmount,
                 "name": adv.advertiser.nickName,
-                "banks": adv.adv.tradeMethods.map(m => m.tradeMethodName) 
-            }
+                "banks": adv.adv.tradeMethods.map(m => m.identifier),
+            })
     }
+
+    return resArr;
+}
+
+const getWhiteBitSpotRate = async () => {
+    let response = await fetch('https://whitebit.com/api/v4/public/ticker');
+    let jsonObj = await response.json();
+    return parseFloat(jsonObj.USDT_UAH.last_price);
+}
+const getBinanceSpotRate = async () => {
+    let response = await fetch('https://www.binance.com/api/v3/ticker/price');
+    let jsonObj = await response.json();
+    return parseFloat(jsonObj.find(v => v.symbol === 'USDTUAH').price);
+}
+
+const getArbitrageArr = (sellOptions, buyOptions) => {
+    let array = [];
+    for (const sell of sellOptions) {
+        for (const buy of buyOptions) {
+            const coeff = 1 - (buy.comissionFee + sell.comissionFee) / 100;
+            const profitUAH = sell.price * coeff - buy.price;
+            const profitPercent = profitUAH * 100 / buy.price;
+            array.push({
+                'sellOption': sell.title,
+                'sellPrice': sell.price,
+                'sellRange': `${Math.round(sell.min)} - ${Math.round(sell.max)} ₴`,
+                'sellNickName': sell.name,
+                'sellBanks': sell.banks,
+                'buyOption': buy.title,
+                'buyPrice': buy.price,
+                'profitUAH': Math.round(profitUAH * 100) / 100,
+                'profitPercent': Math.round(profitPercent * 100) / 100
+            });
+        }
+    }
+    return array;
 }
 
 const update = async () => {
-    // Curling binance p2p for privat24
-    let privatP2P = await curlBinanceP2P(20000, [banks.privat]);
 
-    // Curling binance p2p for other banks
-    let otherP2P = await curlBinanceP2P(20000, [banks.abank, banks.izi, banks.mono, banks.pumb, banks.sport]);
+    let privatP2P = (await curlBinanceP2P(20000, 40000, [banks.privat]))[0];
+    let otherP2P = (await curlBinanceP2P(20000, 40000, [banks.abank, banks.izi, banks.mono, banks.pumb, banks.sport]))[0];
 
-    // Curling WhiteBit USDT price spot
-    let response = await fetch('https://whitebit.com/api/v4/public/ticker');
-    let jsonObj = await response.json();
-    let priceUSDTwhiteBit = parseFloat(jsonObj.USDT_UAH.last_price);
+    const sellOptions = [
+        {'title': 'Binance P2P', 'comissionFee': 0.5, ...privatP2P},
+        {'title': 'Binance P2P', 'comissionFee': 0.0, ...otherP2P}
+    ]
 
-    // Curling Binance USDT price spot
-    response = await fetch('https://www.binance.com/api/v3/ticker/price');
-    jsonObj = await response.json();
-    let priceUSDTbinance = parseFloat(jsonObj.find(v => v.symbol === 'USDTUAH').price);
+    const buyOptions = [
+        {'title': 'WhiteBit Spot', 'comissionFee': 0.1, 'price': await getWhiteBitSpotRate()},
+        {'title':  'Binance Spot', 'comissionFee': 0.5, 'price': await getBinanceSpotRate()}
+    ]
 
-    let res = [
-        {
-            "title": "SELL Privat24 -> BUY Binance Spot",
-            "sellPrice": privatP2P.price,
-            "range": `${privatP2P.min} - ${privatP2P.max}`,
-            "name": privatP2P.name,
-            "buyPrice": priceUSDTbinance,
-            "banks": privatP2P.banks,
-            "profitUAH": Math.round((privatP2P.price * 0.991 - priceUSDTbinance) * 100) / 100,
-            "profitPercent": Math.round(((privatP2P.price * 0.991 - priceUSDTbinance) * 100 / privatP2P.price) * 100) / 100,
-        },
-        {
-            "title": "SELL Privat24 -> BUY WhiteBit Spot",
-            "sellPrice": privatP2P.price,
-            "range": `${privatP2P.min} - ${privatP2P.max}`,
-            "name": privatP2P.name,
-            "buyPrice": priceUSDTwhiteBit,
-            "banks": privatP2P.banks,
-            "profitUAH": Math.round((privatP2P.price * 0.995 - priceUSDTwhiteBit) * 100) / 100,
-            "profitPercent": Math.round(((privatP2P.price * 0.995 - priceUSDTwhiteBit) * 100 / privatP2P.price) * 100) / 100,
-        },
-        {
-            "title": "SELL OtherBanks -> BUY Binance Spot",
-            "sellPrice": otherP2P.price,
-            "range": `${otherP2P.min} - ${otherP2P.max}`,
-            "name": otherP2P.name,
-            "buyPrice": priceUSDTbinance,
-            "banks": otherP2P.banks,
-            "profitUAH": Math.round((otherP2P.price * 0.996 - priceUSDTbinance) * 100) / 100,
-            "profitPercent": Math.round(((otherP2P.price * 0.996 - priceUSDTbinance) * 100 / otherP2P.price) * 100) / 100,
-        },
-        {
-            "title": "SELL OtherBanks -> BUY WhiteBit",
-            "sellPrice": otherP2P.price,
-            "range": `${otherP2P.min} - ${otherP2P.max}`,
-            "name": otherP2P.name,
-            "buyPrice": priceUSDTwhiteBit,
-            "banks": otherP2P.banks,
-            "profitUAH": Math.round((otherP2P.price - priceUSDTwhiteBit) * 100) / 100,
-            "profitPercent": Math.round(((otherP2P.price - priceUSDTwhiteBit) * 100 / otherP2P.price) * 100) / 100,
-        },
-    ];
-    res.sort((a, b) => b.profitPercent - a.profitPercent);
-    return res;
+    return getArbitrageArr(sellOptions, buyOptions).sort((a, b) => b.profitPercent - a.profitPercent);
 }
 
 module.exports = {
-    update: update
+    update: update,
+    getWhiteBitSpotRate: getWhiteBitSpotRate,
+    getBinanceSpotRate: getBinanceSpotRate,
+    curlBinanceP2P: curlBinanceP2P
 }
