@@ -34,9 +34,10 @@ function start() {
             return bot.sendMessage(chatId, string, options={parse_mode: 'html'});
         }
         if(text === '/rates'){
-            const wbRate = await Parse.getWhiteBitSpotRate();
+            const wbRate = Math.round((await Parse.getWhiteBitSpotRate()) * 100) / 100;
             const binanceRate = await Parse.getBinanceSpotRate();
-            let msg = `Whitebit:\t<code> ${wbRate}</code>\nBinance:\t<code> ${binanceRate} (${Math.round(binanceRate * 1.005 * 100) / 100})</code>`;
+            let msg = `Whitebit:\t<code> ${wbRate} (${Math.round(wbRate * 1.001 * 100) / 100})</code>\n`
+            msg += `Binance:\t<code> ${binanceRate} (${Math.round(binanceRate * 1.005 * 100) / 100})</code>`;
             return bot.sendMessage(chatId, msg, options={parse_mode: 'html'});
         }
         if(text == '/p2p'){
