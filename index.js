@@ -36,7 +36,7 @@ function start() {
         if(text === '/rates'){
             const wbRate = await Parse.getWhiteBitSpotRate();
             const binanceRate = await Parse.getBinanceSpotRate();
-            let msg = `Whitebit:\t<code> ${wbRate}</code>\nBinance:\t<code> ${binanceRate} (${binanceRate * 1.005})</code>`;
+            let msg = `Whitebit:\t<code> ${wbRate}</code>\nBinance:\t<code> ${binanceRate} (${Math.round(binanceRate * 1.005 * 100) / 100})</code>`;
             return bot.sendMessage(chatId, msg, options={parse_mode: 'html'});
         }
         if(text == '/p2p'){
