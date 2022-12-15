@@ -1,5 +1,6 @@
 const TelegramApi = require('node-telegram-bot-api')
 const Parse = require('./parse')
+const { Arbitrage } = require('./wise-visa-arbitrage')
 
 
 const token = '5975262233:AAEUfVIcGTN2ybc_mctN_o_ZZpJuRIMmbpU';
@@ -14,7 +15,8 @@ function start() {
         {command: '/subscribe', description: 'Subscribe to notifications'},
         {command: '/unsubscribe', description: 'Unsubscribe from notifications'},
         {command: '/rates', description: 'Get current exchange rates'},
-        {command: '/p2p', description: 'Get first 10 orders on Binance P2P'}
+        {command: '/p2p', description: 'Get first 10 orders on Binance P2P'},
+        {command: '/visa', description: 'Get Wise and Visa arbitrage'},
     ])
     bot.on('message', (async (msg) => {
         const text = msg.text;
@@ -40,7 +42,7 @@ function start() {
             msg += `Binance:\t<code> ${binanceRate} (${Math.round(binanceRate * 1.005 * 100) / 100})</code>`;
             return bot.sendMessage(chatId, msg, options={parse_mode: 'html'});
         }
-        if(text == '/p2p'){
+        if(text === '/p2p'){
             let adverts = await Parse.curlBinanceP2P();
             let msg = '';
             for (const ad of adverts) {
@@ -48,6 +50,18 @@ function start() {
                 msg += `Range: <code> ${ad.min} - ${ad.max} ₴</code>\n`;
                 msg += `Name:  <code> ${ad.name}</code>\n`;
                 msg += `Banks:  <code> ${ad.banks.join(', ')}</code>\n\n`;
+            }
+            return bot.sendMessage(chatId, msg, options = {parse_mode: 'html'});
+        }
+        if(text === '/visa'){
+            let visaArbitrage = await Arbitrage();
+            let msg = '';
+            for (const i of visaArbitrage) {
+                msg += `Currency: <code> ${i.currencySymbol}</code>\n`;
+                msg += `Initial: <code> ${i.euroAmount} €</code>`;
+                msg += `Currency amount: <code> ${i.currencyAmount}, rate: <code> ${i.currencyRate}</code></code>`;
+                msg += `Wise: <code> ${i.wiseEuro} € (${(i.wiseEuro - i.euroAmount) * 100 / i.euroAmount} %)</code>`;
+                msg += `Visa: <code> ${i.visaEuro} € (${(i.visaEuro - i.euroAmount) * 100 / i.euroAmount} %)</code>`;
             }
             return bot.sendMessage(chatId, msg, options = {parse_mode: 'html'});
         }
